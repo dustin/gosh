@@ -14,7 +14,7 @@ import (
 var (
 	timeout = flag.Duration("timeout",
 		time.Minute*15, "Maximum time a script can run")
-	graceTimeout = flag.Duration("timeout",
+	graceTimeout = flag.Duration("gracetimeout",
 		time.Second*5, "Grace period waiting for interrupted cmd to exit")
 	timeoutError = errors.New("timed out")
 )
