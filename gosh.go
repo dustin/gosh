@@ -4,13 +4,17 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 )
 
-func runner(ch chan bool, cmd string, args ...string) {
-	for _ = range ch {
+func runner(ch chan string) {
+	for cmd := range ch {
 		log.Printf("Got request, executing %v", cmd)
-		cmd := exec.Command(cmd, args...)
+		cmd := exec.Command(cmd)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 		err := cmd.Run()
 		if err != nil {
 			log.Printf("Run error: %v", err)
@@ -18,24 +22,44 @@ func runner(ch chan bool, cmd string, args ...string) {
 	}
 }
 
+func triggerer(n string, chin <-chan bool, chout chan<- string) {
+	for _ = range chin {
+		chout <- n
+	}
+}
+
+func findScripts(dn string) []string {
+	d, err := os.Open(dn)
+	if err != nil {
+		log.Fatalf("Can't open script dir: %q", err)
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(1024)
+	if err != nil {
+		log.Fatalf("Can't read directory names: %v", err)
+	}
+	return names
+}
+
 func main() {
 	addr := flag.String("addr", ":8888", "http listen address")
-	path := flag.String("path", "/", "path to trigger script")
+	path := flag.String("path", "/", "path to trigger scripts")
 	flag.Parse()
 
-	if flag.NArg() < 1 {
-		log.Fatalf("Need to know what to run")
+	ch := make(chan string)
+	chs := map[string]chan bool{}
+
+	for _, n := range findScripts(flag.Arg(0)) {
+		chs[n] = make(chan bool)
+		go triggerer(filepath.Join(flag.Arg(0), n), chs[n], ch)
 	}
 
-	ch := make(chan bool, 1)
-	go runner(ch, flag.Arg(0), flag.Args()[1:]...)
+	go runner(ch)
+
 	http.HandleFunc(*path, func(w http.ResponseWriter, r *http.Request) {
 		select {
-		case ch <- true:
+		case chs[r.URL.Path[1:]] <- true:
 		default:
-			// If we didn't write, it's because the
-			// buffer's full, which guarantees another
-			// build will occur after this request anyway.
 		}
 		w.WriteHeader(202)
 	})
