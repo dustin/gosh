@@ -1,13 +1,52 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
+
+var (
+	timeout = flag.Duration("timeout",
+		time.Minute*15, "Maximum time a script can run")
+	graceTimeout = flag.Duration("timeout",
+		time.Second*5, "Grace period waiting for interrupted cmd to exit")
+	timeoutError = errors.New("timed out")
+)
+
+func waitTimeout(cmd *exec.Cmd, to time.Duration) error {
+	ch := make(chan error, 1)
+	go func() { ch <- cmd.Wait() }()
+
+	select {
+	case e := <-ch:
+		return e
+	case <-time.After(to):
+		return timeoutError
+	}
+}
+
+func runCmd(cmd *exec.Cmd) error {
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+
+	err = waitTimeout(cmd, *timeout)
+	if err == timeoutError {
+		cmd.Process.Signal(os.Interrupt)
+		if waitTimeout(cmd, *graceTimeout) == timeoutError {
+			log.Printf("Timed out waiting for grace period")
+			cmd.Process.Kill()
+		}
+	}
+	return err
+}
 
 func runner(ch chan string) {
 	for cmd := range ch {
@@ -15,8 +54,7 @@ func runner(ch chan string) {
 		cmd := exec.Command(cmd)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		err := cmd.Run()
-		if err != nil {
+		if err := runCmd(cmd); err != nil {
 			log.Printf("Run error: %v", err)
 		}
 	}
