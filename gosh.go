@@ -54,13 +54,16 @@ func runCmd(cmd *exec.Cmd) error {
 }
 
 func runner(chs map[string]chan string) {
+	cases := []reflect.SelectCase{}
+	for _, ch := range chs {
+		cases = append(cases, reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(ch)})
+	}
+
 	for {
-		cases := []reflect.SelectCase{}
-		for _, ch := range chs {
-			cases = append(cases, reflect.SelectCase{
-				Dir:  reflect.SelectRecv,
-				Chan: reflect.ValueOf(ch)})
-		}
+		// Grab the next request (arbitrarily if there's more
+		// than one waiting)
 		_, val, _ := reflect.Select(cases)
 		cmdPath := val.String()
 
