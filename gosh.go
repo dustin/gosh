@@ -20,6 +20,10 @@ var (
 )
 
 func waitTimeout(cmd *exec.Cmd, to time.Duration) error {
+	// A buffered channel is used here because we *might* not
+	// actually read from the channel in the select, in which case
+	// the anonymous goroutine would be stuck trying to send
+	// forever.
 	ch := make(chan error, 1)
 	go func() { ch <- cmd.Wait() }()
 
@@ -97,7 +101,14 @@ func main() {
 	http.HandleFunc(*path, func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case chs[r.URL.Path[1:]] <- true:
+			// successfully queued a request to run a script
 		default:
+			// One of two things happened:
+			// 1. The path doesn't actually match to a script,
+			//    so there's nothing to queue.
+			// 2. The buffer is full, meaning there's already a
+			//    run queued that will begin after this request,
+			//    so we don't need to do anything.
 		}
 		w.WriteHeader(202)
 	})
