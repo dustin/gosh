@@ -52,21 +52,16 @@ func runCmd(cmd *exec.Cmd) error {
 	return err
 }
 
-func runner(ch chan string) {
-	for cmd := range ch {
-		log.Printf("Got request, executing %v", cmd)
-		cmd := exec.Command(cmd)
+func runner(cmdmap map[string]string, ch chan string) {
+	for name := range ch {
+		cmdPath := cmdmap[name]
+		log.Printf("Got request, executing %v", cmdPath)
+		cmd := exec.Command(cmdPath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := runCmd(cmd); err != nil {
 			log.Printf("Run error: %v", err)
 		}
-	}
-}
-
-func triggerer(n string, chin <-chan bool, chout chan<- string) {
-	for _ = range chin {
-		chout <- n
 	}
 }
 
@@ -90,13 +85,14 @@ func main() {
 
 	ch := make(chan string)
 	chs := map[string]chan bool{}
+	cmdMap := map[string]string{} // URL path -> filesystem path
 
 	for _, n := range findScripts(flag.Arg(0)) {
-		chs[n] = make(chan bool)
-		go triggerer(filepath.Join(flag.Arg(0), n), chs[n], ch)
+		chs[n] = make(chan bool, 1)
+		cmdMap[n] = filepath.Join(flag.Arg(0), n)
 	}
 
-	go runner(ch)
+	go runner(cmdMap, ch)
 
 	http.HandleFunc(*path, func(w http.ResponseWriter, r *http.Request) {
 		select {
