@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"time"
 )
 
@@ -52,9 +53,17 @@ func runCmd(cmd *exec.Cmd) error {
 	return err
 }
 
-func runner(cmdmap map[string]string, ch chan string) {
-	for name := range ch {
-		cmdPath := cmdmap[name]
+func runner(chs map[string]chan string) {
+	for {
+		cases := []reflect.SelectCase{}
+		for _, ch := range chs {
+			cases = append(cases, reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(ch)})
+		}
+		_, val, _ := reflect.Select(cases)
+		cmdPath := val.String()
+
 		log.Printf("Got request, executing %v", cmdPath)
 		cmd := exec.Command(cmdPath)
 		cmd.Stdout = os.Stdout
@@ -83,21 +92,20 @@ func main() {
 	path := flag.String("path", "/", "path to trigger scripts")
 	flag.Parse()
 
-	ch := make(chan string)
 	chs := map[string]chan string{}
 	cmdMap := map[string]string{} // URL path -> filesystem path
 
 	for _, n := range findScripts(flag.Arg(0)) {
-		chs[n] = ch
+		chs[n] = make(chan string, 1)
 		cmdMap[n] = filepath.Join(flag.Arg(0), n)
 	}
 
-	go runner(cmdMap, ch)
+	go runner(chs)
 
 	http.HandleFunc(*path, func(w http.ResponseWriter, r *http.Request) {
 		urlPath := r.URL.Path[1:]
 		select {
-		case chs[urlPath] <- urlPath:
+		case chs[urlPath] <- cmdMap[urlPath]:
 			// successfully queued a request to run a script
 		default:
 			// One of two things happened:
