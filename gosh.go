@@ -84,19 +84,20 @@ func main() {
 	flag.Parse()
 
 	ch := make(chan string)
-	chs := map[string]chan bool{}
+	chs := map[string]chan string{}
 	cmdMap := map[string]string{} // URL path -> filesystem path
 
 	for _, n := range findScripts(flag.Arg(0)) {
-		chs[n] = make(chan bool, 1)
+		chs[n] = ch
 		cmdMap[n] = filepath.Join(flag.Arg(0), n)
 	}
 
 	go runner(cmdMap, ch)
 
 	http.HandleFunc(*path, func(w http.ResponseWriter, r *http.Request) {
+		urlPath := r.URL.Path[1:]
 		select {
-		case chs[r.URL.Path[1:]] <- true:
+		case chs[urlPath] <- urlPath:
 			// successfully queued a request to run a script
 		default:
 			// One of two things happened:
