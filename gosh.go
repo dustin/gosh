@@ -20,7 +20,7 @@ var (
 	bindAddr   = flag.String("addr", ":8888", "http listen address")
 	prefixPath = flag.String("path", "/", "path to trigger scripts")
 
-	timeoutError = errors.New("timed out")
+	errTimeout = errors.New("timed out")
 )
 
 func waitTimeout(cmd *exec.Cmd, to time.Duration) error {
@@ -35,7 +35,7 @@ func waitTimeout(cmd *exec.Cmd, to time.Duration) error {
 	case e := <-ch:
 		return e
 	case <-time.After(to):
-		return timeoutError
+		return errTimeout
 	}
 }
 
@@ -46,9 +46,9 @@ func runCmd(cmd *exec.Cmd) error {
 	}
 
 	err = waitTimeout(cmd, *timeout)
-	if err == timeoutError {
+	if err == errTimeout {
 		cmd.Process.Signal(os.Interrupt)
-		if waitTimeout(cmd, *graceTimeout) == timeoutError {
+		if waitTimeout(cmd, *graceTimeout) == errTimeout {
 			log.Printf("Timed out waiting for grace period")
 			cmd.Process.Kill()
 		}
