@@ -17,6 +17,9 @@ var (
 		time.Minute*15, "Maximum time a script can run")
 	graceTimeout = flag.Duration("gracetimeout",
 		time.Second*5, "Grace period waiting for interrupted cmd to exit")
+	bindAddr   = flag.String("addr", ":8888", "http listen address")
+	prefixPath = flag.String("path", "/", "path to trigger scripts")
+
 	timeoutError = errors.New("timed out")
 )
 
@@ -91,8 +94,6 @@ func findScripts(dn string) []string {
 }
 
 func main() {
-	addr := flag.String("addr", ":8888", "http listen address")
-	path := flag.String("path", "/", "path to trigger scripts")
 	flag.Parse()
 
 	chs := map[string]chan string{}
@@ -105,7 +106,7 @@ func main() {
 
 	go runner(chs)
 
-	http.HandleFunc(*path, func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(*prefixPath, func(w http.ResponseWriter, r *http.Request) {
 		urlPath := r.URL.Path[1:]
 		select {
 		case chs[urlPath] <- cmdMap[urlPath]:
@@ -120,5 +121,5 @@ func main() {
 		}
 		w.WriteHeader(202)
 	})
-	log.Fatal(http.ListenAndServe(*addr, nil))
+	log.Fatal(http.ListenAndServe(*bindAddr, nil))
 }
