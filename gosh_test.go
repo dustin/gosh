@@ -28,3 +28,11 @@ func TestRunCmd(t *testing.T) {
 		}
 	}
 }
+
+func TestRunFail(t *testing.T) {
+	cmd := &exec.Cmd{}
+	err := runCmd(cmd)
+	if err == nil {
+		t.Errorf("Failed to error in a command.")
+	}
+}
