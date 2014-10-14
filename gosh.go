@@ -23,14 +23,7 @@ var (
 	errTimeout = errors.New("timed out")
 )
 
-func waitTimeout(cmd *exec.Cmd, to time.Duration) error {
-	// A buffered channel is used here because we *might* not
-	// actually read from the channel in the select, in which case
-	// the anonymous goroutine would be stuck trying to send
-	// forever.
-	ch := make(chan error, 1)
-	go func() { ch <- cmd.Wait() }()
-
+func waitTimeout(ch chan error, to time.Duration) error {
 	select {
 	case e := <-ch:
 		return e
@@ -45,10 +38,17 @@ func runCmd(cmd *exec.Cmd) error {
 		return err
 	}
 
-	err = waitTimeout(cmd, *timeout)
+	// A buffered channel is used here because we *might* not
+	// actually read from the channel in the select, in which case
+	// the anonymous goroutine would be stuck trying to send
+	// forever.
+	ch := make(chan error, 1)
+	go func() { ch <- cmd.Wait() }()
+
+	err = waitTimeout(ch, *timeout)
 	if err == errTimeout {
 		cmd.Process.Signal(os.Interrupt)
-		if waitTimeout(cmd, *graceTimeout) == errTimeout {
+		if waitTimeout(ch, *graceTimeout) == errTimeout {
 			log.Printf("Timed out waiting for grace period")
 			cmd.Process.Kill()
 		}
