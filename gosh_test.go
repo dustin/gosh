@@ -20,6 +20,20 @@ trap sig 2 15
 /bin/sleep 5
 `
 
+func exists(o string) bool {
+	_, err := os.Stat(o)
+	return err == nil
+}
+
+func findCmd(options ...string) string {
+	for _, o := range options {
+		if exists(o) {
+			return o
+		}
+	}
+	return "/not/found"
+}
+
 func TestRunCmd(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -27,8 +41,8 @@ func TestRunCmd(t *testing.T) {
 		args        []string
 		shouldError bool
 	}{
-		{"/usr/bin/false", nil, true},
-		{"/usr/bin/true", nil, false},
+		{findCmd("/usr/bin/false", "/bin/false"), nil, true},
+		{findCmd("/usr/bin/true", "/bin/true"), nil, false},
 		{"/bin/sleep", []string{"900"}, true},
 	}
 
