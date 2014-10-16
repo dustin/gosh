@@ -80,17 +80,17 @@ func runner(chs map[string]chan string) {
 	}
 }
 
-func findScripts(dn string) []string {
+func findScripts(dn string) ([]string, error) {
 	d, err := os.Open(dn)
 	if err != nil {
-		log.Fatalf("Can't open script dir: %q", err)
+		return nil, err
 	}
 	defer d.Close()
 	names, err := d.Readdirnames(1024)
 	if err != nil {
-		log.Fatalf("Can't read directory names: %v", err)
+		return nil, err
 	}
-	return names
+	return names, nil
 }
 
 func main() {
@@ -99,7 +99,11 @@ func main() {
 	chs := map[string]chan string{}
 	cmdMap := map[string]string{} // URL path -> filesystem path
 
-	for _, n := range findScripts(flag.Arg(0)) {
+	scripts, err := findScripts(flag.Arg(0))
+	if err != nil {
+		log.Fatalf("Error finding scripts: %v", err)
+	}
+	for _, n := range scripts {
 		chs[n] = make(chan string, 1)
 		cmdMap[n] = filepath.Join(flag.Arg(0), n)
 	}

@@ -4,6 +4,8 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 )
@@ -69,20 +71,55 @@ func TestRunFail(t *testing.T) {
 
 func TestNoInterrupt(t *testing.T) {
 	t.Parallel()
-	os.Mkdir("scripts", 0777)
-	err := ioutil.WriteFile("scripts/uninterruptable", []byte(uninterruptable), 0755)
+	os.Mkdir("tmp", 0777)
+	err := ioutil.WriteFile("tmp/uninterruptable", []byte(uninterruptable), 0755)
 	if err != nil {
 		t.Fatalf("Can't create test script.")
 	}
+	defer os.Remove("tmp/uninterruptable")
 
 	*timeout = time.Second
 	*graceTimeout = time.Second
-	cmd := exec.Command("./scripts/uninterruptable")
+	cmd := exec.Command("./tmp/uninterruptable")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := runCmd(cmd); err == nil {
 		t.Errorf("Expected error from uninterruptable")
 	} else {
 		t.Logf("Error was %v", err)
+	}
+}
+
+func TestFindScripts(t *testing.T) {
+	t.Parallel()
+
+	scripts, err := findScripts("tmp/test-find-non-existent")
+	if err == nil {
+		t.Errorf("Failed to fail to find missing scripts, got %v", scripts)
+	}
+
+	scripts, err = findScripts("gosh.go")
+	if err == nil {
+		t.Errorf("Failed to fail to find missing scripts, got %v", scripts)
+	}
+
+	os.MkdirAll("tmp/test-find", 0777)
+	names := []string{"script1", "script2", "script3"}
+	defer os.RemoveAll("tmp/test-find")
+	for _, fn := range names {
+		err := ioutil.WriteFile("tmp/test-find/"+fn, nil, 0755)
+		if err != nil {
+			t.Fatalf("Can't create test script.")
+		}
+	}
+
+	scripts, err = findScripts("tmp/test-find")
+	if err != nil {
+		t.Fatalf("Failed to find missing scripts, got %v", err)
+	}
+
+	sort.Strings(scripts)
+	if !reflect.DeepEqual(scripts, names) {
+		t.Errorf("Got %v, wanted %v", scripts, names)
 	}
 }
