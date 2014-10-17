@@ -56,6 +56,19 @@ func runCmd(cmd *exec.Cmd) error {
 	return err
 }
 
+func run(cmdPath string) error {
+	cmd := exec.Command(cmdPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := runCmd(cmd)
+	if err != nil {
+		log.Printf("Run error: %v", err)
+	}
+	return err
+}
+
+var runFunc = run
+
 func runner(chs map[string]chan string) {
 	cases := []reflect.SelectCase{}
 	for _, ch := range chs {
@@ -71,12 +84,7 @@ func runner(chs map[string]chan string) {
 		cmdPath := val.String()
 
 		log.Printf("Got request, executing %v", cmdPath)
-		cmd := exec.Command(cmdPath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := runCmd(cmd); err != nil {
-			log.Printf("Run error: %v", err)
-		}
+		runFunc(cmdPath)
 	}
 }
 

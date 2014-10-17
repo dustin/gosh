@@ -36,6 +36,11 @@ func findCmd(options ...string) string {
 	return "/not/found"
 }
 
+var (
+	falseCmd = findCmd("/usr/bin/false", "/bin/false")
+	trueCmd  = findCmd("/usr/bin/true", "/bin/true")
+)
+
 func TestRunCmd(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -43,8 +48,8 @@ func TestRunCmd(t *testing.T) {
 		args        []string
 		shouldError bool
 	}{
-		{findCmd("/usr/bin/false", "/bin/false"), nil, true},
-		{findCmd("/usr/bin/true", "/bin/true"), nil, false},
+		{falseCmd, nil, true},
+		{trueCmd, nil, false},
 		{"/bin/sleep", []string{"900"}, true},
 	}
 
@@ -57,6 +62,15 @@ func TestRunCmd(t *testing.T) {
 			t.Errorf("%v(%v): Error expectation was %v. error was %v",
 				test.cmd, test.args, test.shouldError, err)
 		}
+	}
+}
+
+func TestRun(t *testing.T) {
+	if err := run(trueCmd); err != nil {
+		t.Errorf("True failed: %v", err)
+	}
+	if err := run(falseCmd); err == nil {
+		t.Errorf("False unexpected succeeded")
 	}
 }
 
