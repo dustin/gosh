@@ -67,9 +67,7 @@ func run(cmdPath string) error {
 	return err
 }
 
-var runFunc = run
-
-func runner(chs map[string]chan string) {
+func runner(chs map[string]chan string, runFunc func(string) error) {
 	cases := []reflect.SelectCase{}
 	for _, ch := range chs {
 		cases = append(cases, reflect.SelectCase{
@@ -80,7 +78,10 @@ func runner(chs map[string]chan string) {
 	for {
 		// Grab the next request (arbitrarily if there's more
 		// than one waiting)
-		_, val, _ := reflect.Select(cases)
+		_, val, ok := reflect.Select(cases)
+		if !ok {
+			return
+		}
 		cmdPath := val.String()
 
 		log.Printf("Got request, executing %v", cmdPath)
@@ -116,7 +117,7 @@ func main() {
 		cmdMap[n] = filepath.Join(flag.Arg(0), n)
 	}
 
-	go runner(chs)
+	go runner(chs, run)
 
 	http.HandleFunc(*prefixPath, func(w http.ResponseWriter, r *http.Request) {
 		urlPath := r.URL.Path[1:]

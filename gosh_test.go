@@ -137,3 +137,45 @@ func TestFindScripts(t *testing.T) {
 		t.Errorf("Got %v, wanted %v", scripts, names)
 	}
 }
+
+func TestRunner(t *testing.T) {
+	t.Parallel()
+
+	chan1 := make(chan string)
+	chan2 := make(chan string)
+	chan3 := make(chan string)
+	chans := map[string]chan string{"test1": chan1, "test2": chan2, "test3": chan3}
+
+	outch := make(chan string, 10)
+	go runner(chans, func(s string) error {
+		outch <- s
+		return nil
+	})
+
+	chan1 <- "chan1"
+	chan1 <- "chan1"
+	chan1 <- "chan1"
+	chan3 <- "chan3"
+	close(chan1)
+
+	chan1n := 0
+	chan3n := 0
+	for i := 0; i < 4; i++ {
+		s := <-outch
+		switch s {
+		case "chan1":
+			chan1n++
+		case "chan3":
+			chan3n++
+		default:
+			t.Errorf("Unexpected message: %v", s)
+		}
+	}
+
+	if chan1n != 3 {
+		t.Errorf("Expected three messages on chan1, got %v", chan1n)
+	}
+	if chan3n != 1 {
+		t.Errorf("Expected one messages on chan3, got %v", chan3n)
+	}
+}
