@@ -66,6 +66,8 @@ func TestRunCmd(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
+	t.Parallel()
+
 	if err := run(trueCmd); err != nil {
 		t.Errorf("True failed: %v", err)
 	}
