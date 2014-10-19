@@ -149,7 +149,8 @@ func TestRunner(t *testing.T) {
 	chans := map[string]chan string{"test1": chan1, "test2": chan2, "test3": chan3}
 
 	outch := make(chan string, 10)
-	go runner(chans, func(s string) error {
+	h := &httpHandler{chans, nil}
+	go h.run(func(s string) error {
 		outch <- s
 		return nil
 	})

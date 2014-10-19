@@ -67,28 +67,6 @@ func run(cmdPath string) error {
 	return err
 }
 
-func runner(chs map[string]chan string, runFunc func(string) error) {
-	cases := []reflect.SelectCase{}
-	for _, ch := range chs {
-		cases = append(cases, reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(ch)})
-	}
-
-	for {
-		// Grab the next request (arbitrarily if there's more
-		// than one waiting)
-		_, val, ok := reflect.Select(cases)
-		if !ok {
-			return
-		}
-		cmdPath := val.String()
-
-		log.Printf("Got request, executing %v", cmdPath)
-		runFunc(cmdPath)
-	}
-}
-
 func findScripts(dn string) ([]string, error) {
 	d, err := os.Open(dn)
 	if err != nil {
@@ -118,6 +96,49 @@ func mkScriptChans(dir string) (map[string]chan string, map[string]string, error
 	return chs, cmdMap, nil
 }
 
+type httpHandler struct {
+	chs    map[string]chan string
+	cmdMap map[string]string
+}
+
+func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	urlPath := r.URL.Path[1:]
+	select {
+	case h.chs[urlPath] <- h.cmdMap[urlPath]:
+		// successfully queued a request to run a script
+	default:
+		// One of two things happened:
+		// 1. The path doesn't actually match to a script,
+		//    so there's nothing to queue.
+		// 2. The buffer is full, meaning there's already a
+		//    run queued that will begin after this request,
+		//    so we don't need to do anything.
+	}
+	w.WriteHeader(202)
+}
+
+func (h httpHandler) run(runFunc func(string) error) {
+	cases := []reflect.SelectCase{}
+	for _, ch := range h.chs {
+		cases = append(cases, reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(ch)})
+	}
+
+	for {
+		// Grab the next request (arbitrarily if there's more
+		// than one waiting)
+		_, val, ok := reflect.Select(cases)
+		if !ok {
+			return
+		}
+		cmdPath := val.String()
+
+		log.Printf("Got request, executing %v", cmdPath)
+		runFunc(cmdPath)
+	}
+}
+
 func main() {
 	flag.Parse()
 
@@ -126,22 +147,9 @@ func main() {
 		log.Fatalf("Error finding scripts: %v", err)
 	}
 
-	go runner(chs, run)
+	h := &httpHandler{chs, cmdMap}
+	go h.run(run)
 
-	http.HandleFunc(*prefixPath, func(w http.ResponseWriter, r *http.Request) {
-		urlPath := r.URL.Path[1:]
-		select {
-		case chs[urlPath] <- cmdMap[urlPath]:
-			// successfully queued a request to run a script
-		default:
-			// One of two things happened:
-			// 1. The path doesn't actually match to a script,
-			//    so there's nothing to queue.
-			// 2. The buffer is full, meaning there's already a
-			//    run queued that will begin after this request,
-			//    so we don't need to do anything.
-		}
-		w.WriteHeader(202)
-	})
-	log.Fatal(http.ListenAndServe(*bindAddr, nil))
+	http.Handle(*prefixPath, h)
+	log.Fatal(http.ListenAndServe(*bindAddr, h))
 }
