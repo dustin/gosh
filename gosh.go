@@ -84,14 +84,14 @@ func mkScriptChans(dir string) (map[string]chan string, map[string]string, error
 	chs := map[string]chan string{}
 	cmdMap := map[string]string{} // URL path -> filesystem path
 
-	scripts, err := findScripts(flag.Arg(0))
+	scripts, err := findScripts(dir)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	for _, n := range scripts {
 		chs[n] = make(chan string, 1)
-		cmdMap[n] = filepath.Join(flag.Arg(0), n)
+		cmdMap[n] = filepath.Join(dir, n)
 	}
 	return chs, cmdMap, nil
 }

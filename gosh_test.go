@@ -140,6 +140,51 @@ func TestFindScripts(t *testing.T) {
 	}
 }
 
+func TestMkScriptChans(t *testing.T) {
+	t.Parallel()
+
+	m1, m2, err := mkScriptChans("tmp/test-find-non-existent")
+	if err == nil {
+		t.Errorf("Failed to fail to find missing scripts, got %v / %v", m1, m2)
+	}
+
+	os.MkdirAll("tmp/test-mkscr", 0777)
+	names := []string{"script1", "script2", "script3"}
+	defer os.RemoveAll("tmp/test-mkscr")
+	for _, fn := range names {
+		err := ioutil.WriteFile("tmp/test-mkscr/"+fn, nil, 0755)
+		if err != nil {
+			t.Fatalf("Can't create test script.")
+		}
+	}
+
+	chans, chanmap, err := mkScriptChans("tmp/test-mkscr")
+	if err != nil {
+		t.Fatalf("Failed to find missing scripts, got %v", err)
+	}
+	if len(chans) != len(chanmap) {
+		t.Errorf("Huh? %v %v", chans, chanmap)
+	}
+	expmap := map[string]string{
+		"script1": "tmp/test-mkscr/script1",
+		"script2": "tmp/test-mkscr/script2",
+		"script3": "tmp/test-mkscr/script3",
+	}
+	if len(chanmap) != len(expmap) {
+		t.Errorf("chanmap != expmap: %v, %v", chanmap, expmap)
+	}
+
+	for k, v := range expmap {
+		got := chanmap[k]
+		if got != v {
+			t.Errorf("Error on %q, wanted %q, got %q", k, v, got)
+		}
+		if _, ok := chans[k]; !ok {
+			t.Errorf("No corresponding channel for %q", k)
+		}
+	}
+}
+
 func TestRunner(t *testing.T) {
 	t.Parallel()
 
