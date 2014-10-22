@@ -2,6 +2,8 @@ package main
 
 import (
 	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"reflect"
@@ -225,5 +227,34 @@ func TestRunner(t *testing.T) {
 	}
 	if chan3n != 1 {
 		t.Errorf("Expected one messages on chan3, got %v", chan3n)
+	}
+}
+
+func TestHandler(t *testing.T) {
+	h := &httpHandler{
+		cmdMap: map[string]string{"a": "woo"},
+		chs:    map[string]chan string{"a": make(chan string, 1)},
+	}
+
+	urls := []string{"http://localhost/a", "http://localhost/a", "http://localhost/b"}
+	for i, u := range urls {
+		w := httptest.NewRecorder()
+		req, err := http.NewRequest("GET", u, nil)
+		if err != nil {
+			t.Fatalf("Error making request: %v", err)
+		}
+		h.ServeHTTP(w, req)
+		if w.Code != 202 {
+			t.Errorf("Incorrect code on %v[%d]: %v", u, i, w.Code)
+		}
+	}
+
+	select {
+	case s := <-h.chs["a"]:
+		if s != "woo" {
+			t.Errorf(`Expected leftover to be "woo", was %q`, s)
+		}
+	default:
+		t.Error(`No message waiting in "a" chan`)
 	}
 }
