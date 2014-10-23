@@ -1,6 +1,6 @@
 # gosh - a tiny hook server
 
-gosh exists to run shell scripts on demand within a fairly small set
+`gosh` exists to run shell scripts on demand within a fairly small set
 of constraints:
 
 1. The shell scripts must be known ahead of time.
@@ -9,9 +9,9 @@ of constraints:
 
 ## Usage
 
-Firstly, gosh runs scripts that are pre-defined in a scripts
+Firstly, `gosh` runs scripts that are pre-defined in a scripts
 directory.  This directory is specified by the final argument to
-gosh.  e.g.:
+`gosh`.  e.g.:
 
     gosh /some/directory
 
@@ -23,8 +23,7 @@ with the following example command:
 This will queue an execution and return an HTTP `202`.  This is pretty
 much the only status that will ever be returned.
 
-If you request a
-path that doesn't match a file, you'll get a `202`.
+If you request a path that doesn't match a file, you'll get a `202`.
 
 If the task is already running, another run will be queued.
 
