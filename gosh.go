@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"flag"
 	"log"
 	"net/http"
@@ -13,58 +13,26 @@ import (
 )
 
 var (
-	timeout = flag.Duration("timeout",
-		time.Minute*15, "Maximum time a script can run")
-	graceTimeout = flag.Duration("gracetimeout",
-		time.Second*5, "Grace period waiting for interrupted cmd to exit")
+	timeout    = flag.Duration("timeout", time.Minute*15, "Maximum time a script can run")
 	bindAddr   = flag.String("addr", ":8888", "http listen address")
 	prefixPath = flag.String("path", "/", "path to trigger scripts")
-
-	errTimeout = errors.New("timed out")
 )
 
-func waitTimeout(ch chan error, to time.Duration) error {
-	select {
-	case e := <-ch:
-		return e
-	case <-time.After(to):
-		return errTimeout
-	}
-}
-
-func runCmd(cmd *exec.Cmd) error {
-	err := cmd.Start()
-	if err != nil {
-		return err
-	}
-
-	// A buffered channel is used here because we *might* not
-	// actually read from the channel in the select, in which case
-	// the anonymous goroutine would be stuck trying to send
-	// forever.
-	ch := make(chan error, 1)
-	go func() { ch <- cmd.Wait() }()
-
-	err = waitTimeout(ch, *timeout)
-	if err == errTimeout {
-		cmd.Process.Signal(os.Interrupt)
-		if waitTimeout(ch, *graceTimeout) == errTimeout {
-			log.Printf("Timed out waiting for grace period")
-			cmd.Process.Kill()
-		}
-	}
-	return err
-}
-
-func run(cmdPath string) error {
-	cmd := exec.Command(cmdPath)
+func run(cmdPath string, args ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, cmdPath, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	err := runCmd(cmd)
-	if err != nil {
-		log.Printf("Run error: %v", err)
+	if err := cmd.Start(); err != nil {
+		log.Printf("Can't start command: %v", err)
+		return err
 	}
-	return err
+	if err := cmd.Wait(); err != nil {
+		log.Printf("Run error: %v", err)
+		return err
+	}
+	return nil
 }
 
 func findScripts(dn string) ([]string, error) {
@@ -117,7 +85,7 @@ func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(202)
 }
 
-func (h httpHandler) run(runFunc func(string) error) {
+func (h httpHandler) run(runFunc func(string, ...string) error) {
 	cases := []reflect.SelectCase{}
 	for _, ch := range h.chs {
 		cases = append(cases, reflect.SelectCase{

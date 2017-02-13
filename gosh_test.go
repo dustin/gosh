@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"reflect"
 	"sort"
 	"testing"
@@ -58,8 +57,7 @@ func TestRunCmd(t *testing.T) {
 	*timeout = time.Second
 
 	for _, test := range tests {
-		cmd := exec.Command(test.cmd, test.args...)
-		err := runCmd(cmd)
+		err := run(test.cmd, test.args...)
 		if (err != nil) != test.shouldError {
 			t.Errorf("%v(%v): Error expectation was %v. error was %v",
 				test.cmd, test.args, test.shouldError, err)
@@ -80,8 +78,7 @@ func TestRun(t *testing.T) {
 
 func TestRunFail(t *testing.T) {
 	t.Parallel()
-	cmd := &exec.Cmd{}
-	err := runCmd(cmd)
+	err := run("/bin/nonexistent")
 	if err == nil {
 		t.Errorf("Failed to error in a command.")
 	}
@@ -97,11 +94,7 @@ func TestNoInterrupt(t *testing.T) {
 	defer os.Remove("tmp/uninterruptable")
 
 	*timeout = time.Second
-	*graceTimeout = time.Second
-	cmd := exec.Command("./tmp/uninterruptable")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := runCmd(cmd); err == nil {
+	if err := run("./tmp/uninterruptable"); err == nil {
 		t.Errorf("Expected error from uninterruptable")
 	} else {
 		t.Logf("Error was %v", err)
@@ -197,7 +190,7 @@ func TestRunner(t *testing.T) {
 
 	outch := make(chan string, 10)
 	h := &httpHandler{chans, nil}
-	go h.run(func(s string) error {
+	go h.run(func(s string, args ...string) error {
 		outch <- s
 		return nil
 	})
